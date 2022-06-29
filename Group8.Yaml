@@ -1,0 +1,205 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "this template creates VPC, with public and private subnet"
+
+Parameters:
+  VpcCIDR:
+    Default: 10.0.0.0/16
+    Description: enter the Ip range for this vpc
+    Type: String
+
+  PublicSubnet1cidr:
+    Default: 10.0.0.0/24
+    Description: enter the Ip range for the Public subnet1
+    Type: String
+
+  PublicSubnet2cidr:
+    Default: 10.0.1.0/24
+    Description: enter the Ip range for the Public subnet2
+    Type: String
+
+  PrivateSubnet1cidr:
+    Default: 10.0.2.0/24
+    Description: enter the Ip range for the Private subnet1
+    Type: String
+
+  PrivateSubnet2cidr:
+    Default: 10.0.5.0/24
+    Description: enter the Ip range for the Private subnet2
+    Type: String
+
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+Resources:
+  VPCgroup8:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - key: Name
+          Value: Group8 Demo
+
+  Internetgatewaygroup8:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - key: Name
+          Value: Group8 IGW
+
+  InternetGatewayAttachmentgoup8:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref Internetgatewaygroup8
+      VpcId: !Ref VPCgroup8
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref PublicSubnet1cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - key: Name
+          Value: Public Subnet1
+      VpcId: !Ref VPCgroup8
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref PublicSubnet2cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - key: Name
+          Value: Public Public Subnet2
+      VpcId: !Ref VPCgroup8
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - key: Name
+          Value: Public routetable
+      VpcId: !Ref VPCgroup8
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Internetgatewaygroup8
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref PrivateSubnet1cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - key: Name
+          Value: PrivateSubnet1
+      VpcId: !Ref VPCgroup8
+
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref PrivateSubnet2cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - key: Name
+          Value: PrivateSubnet2
+      VpcId: !Ref VPCgroup8
+
+  ALBSecuritygroupe:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Groupdescription: Enable http to client host
+      SecuritygroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ALB security groupe
+      VpcId: !Ref VPCgroup8
+
+  SSHSecuritygroupe:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Groupdescription: SSh Security group
+      SecuritygroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+      Tags:
+        - Key: Name
+          Value: SSH security groupe
+      VpcId: !Ref VPCgroup8
+
+  WebserverSecuritygroupe:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Groupdescription: Enable http/https access via port 80/443 locked down to load balancer
+      SecuritygroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecuritygroupe
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecuritygroupe
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref SSHSecuritygroupe
+      Tags:
+        - Key: Name
+          Value: Webserver security groupe
+      VpcId: !Ref VPCgroup8
+
+
+  DatabaseSecuritygroupe:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Groupdescription: open database for access
+      SecuritygroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebserverSecuritygroupe
+      Tags:
+        - Key: Name
+          Value: Database security groupe
+      VpcId: !Ref VPCgroup8
